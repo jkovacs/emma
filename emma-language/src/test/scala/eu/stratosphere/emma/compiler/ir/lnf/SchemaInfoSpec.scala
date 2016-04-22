@@ -10,14 +10,30 @@ import org.scalatest.junit.JUnitRunner
 @RunWith(classOf[JUnitRunner])
 class SchemaInfoSpec extends BaseCompilerSpec {
 
-  import compiler.Schema.{Field, Info, MemberField, SimpleField}
-  import compiler.Term
+  import compiler._
+  import universe._
+
+  import Schema.{Field, Info, MemberField, SimpleField}
   import eu.stratosphere.emma.testschema.Marketing._
 
-  import compiler.universe._
-
-  def typeCheck[T](expr: Expr[T]): Tree = {
-    compiler.typeCheck(expr.tree)
+  def typeCheckAndANF[T]: Expr[T] => Tree = {
+    (_: Expr[T]).tree
+  } andThen {
+    Type.check(_)
+  } andThen {
+    LNF.destructPatternMatches
+  } andThen {
+    LNF.resolveNameClashes
+  } andThen {
+    LNF.anf
+  } andThen {
+    LNF.simplify
+  } andThen {
+    Comprehension.resugar(API.bagSymbol)
+  } andThen {
+    Comprehension.normalize(API.bagSymbol)
+  } andThen {
+    Owner.at(Owner.enclosing)
   }
 
   def symbolOf(name: String)(tree: Tree): Symbol = tree.collect {
@@ -25,8 +41,6 @@ class SchemaInfoSpec extends BaseCompilerSpec {
   }.head
 
   "tuple tupes playground" - {
-
-    import compiler.Type
 
     val examples = Seq(
       typeCheck(reify {
@@ -57,7 +71,7 @@ class SchemaInfoSpec extends BaseCompilerSpec {
     }
 
     // assert that the funsyms belong to recognized constructors
-    val res = for ((f, t) <- funsyms zip types) {
+    for ((f, t) <- funsyms zip types) {
       // the owning class of the function symbol should be the class of the target
       val cmp = f.owner.companionSymbol
       val cls = cmp.companion
@@ -71,7 +85,7 @@ class SchemaInfoSpec extends BaseCompilerSpec {
     }
 
     // extract the projections associated with the function applications
-    val proj = for (f <- funsyms) yield {
+    for (f <- funsyms) yield {
       // the owning class of the function symbol should be the class of the target
       val cmp = f.owner.companionSymbol
       val cls = cmp.companion
@@ -85,6 +99,7 @@ class SchemaInfoSpec extends BaseCompilerSpec {
   }
 
   "local schema" - {
+
     "without control flow" in {
       // ANF representation with `desugared` comprehensions
       val fn = typeCheck(reify {
@@ -127,7 +142,7 @@ class SchemaInfoSpec extends BaseCompilerSpec {
       val exp = Info(Set(cls$01, cls$02, cls$03, cls$04, cls$05, cls$06, cls$07))
 
       // compute actual local schema
-      val act = compiler.Schema.local(fn)
+      val act = Schema.local(fn)
 
       // match the two
       act shouldBe exp
@@ -138,4 +153,24 @@ class SchemaInfoSpec extends BaseCompilerSpec {
       // TODO
     }
   }
+
+  "function analysis" in {
+
+    import Tree._
+
+    val inp = typeCheckAndANF(reify {
+
+      val f = (x: Int) => {
+        val g = (y: Int) => x * y
+        g(5)
+      }
+
+      for {
+        Click(_, userID, _) <- clicks
+      } yield userID
+    })
+
+    printTree("exp tree")(inp)
+  }
+
 }

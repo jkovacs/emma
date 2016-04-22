@@ -61,7 +61,7 @@ trait SchemaOptimizations extends CommonIR {
       traverse(tree) {
         // patterns of type `x = y.target`
         case val_(x, Select(y, member@TermName(_)), _) =>
-          equivalences += SimpleField(x) -> MemberField(Term.of(y), Term.member(y, member))
+          equivalences += SimpleField(x) -> MemberField(Term sym y, Term.member(y, member))
           equivalences ++= caseClassMemberEquivalences(x)
 
         // patterns of type `x = constructor (arg1, ..., argN)`
@@ -80,6 +80,8 @@ trait SchemaOptimizations extends CommonIR {
           equivalences += SimpleField(x) -> SimpleField(x)
           equivalences ++= caseClassMemberEquivalences(x)
 
+        // TODO
+        case block(_, expr) =>
       }
 
       Info(equivalenceClasses(equivalences))
