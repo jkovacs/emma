@@ -4,7 +4,7 @@ package compiler
 import eu.stratosphere.emma.compiler.lang.source.Source
 import eu.stratosphere.emma.compiler.lang.AlphaEq
 import eu.stratosphere.emma.compiler.lang.core.Core
-import eu.stratosphere.emma.compiler.ir.lnf.SchemaOptimizations
+import eu.stratosphere.emma.compiler.lang.SchemaOptimizations
 
 import scala.reflect.api.Universe
 

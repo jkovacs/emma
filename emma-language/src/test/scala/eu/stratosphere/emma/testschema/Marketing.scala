@@ -36,7 +36,7 @@ object Marketing {
 
   val clicks = DataBag(Seq(
     Click(1, 1, Instant.parse("2015-04-04T14:50:05.00Z")),
-    Click(1, 2, Instant.parse("2015-04-04T14:51:12.00Z")),
-    Click(2, 3, Instant.parse("2015-04-04T14:55:06.00Z"))
+    Click(2, 1, Instant.parse("2015-04-04T14:51:12.00Z")),
+    Click(3, 2, Instant.parse("2015-04-04T14:55:06.00Z"))
   ))
 }
