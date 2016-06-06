@@ -4,6 +4,7 @@ import eu.stratosphere.emma.compiler.Common
 import eu.stratosphere.emma.compiler.lang.core.Core
 
 import scala.collection.mutable
+import scala.reflect.api.Universe
 import scalax.collection.GraphEdge.UnDiEdge
 import scalax.collection.immutable.Graph
 
@@ -59,8 +60,8 @@ trait SchemaOptimizations extends Common {
 
       override def toString: String =
         s"""Schema(
-           |	${fieldClasses.map(_.toString()).mkString(",\n\t")}
-           |)""".stripMargin
+            |	${fieldClasses.map(_.toString()).mkString(",\n\t")}
+            |)""".stripMargin
     }
 
     object Info {
@@ -105,11 +106,11 @@ trait SchemaOptimizations extends Common {
     }
 
     /**
-     * Compute the (global) schema information for a tree fragment.
-     *
-     * @param tree The ANF [[Tree]] to be analyzed.
-     * @return The schema information for the input tree.
-     */
+      * Compute the (global) schema information for a tree fragment.
+      *
+      * @param tree The ANF [[Tree]] to be analyzed.
+      * @return The schema information for the input tree.
+      */
     private[emma] def global(tree: Tree): Unit = {
       val meta = new Core.Meta(tree)
       val cs = new Comprehension.Syntax(API.bagSymbol)
@@ -119,17 +120,18 @@ trait SchemaOptimizations extends Common {
           println("Comprehension:")
           val schema = comprehensionSchema(comprehension, meta)
           println(s"Schema:\n\tConsumes: ${schema.consumes}\n\tYields: ${schema.yields}\n\tEquivalences: ${schema.schema.fieldClasses}")
+
         case v@val_(_, _, _) =>
           println(v)
       }
     }
 
     /**
-     * Compute the (local) schema information for an anonymous function.
-     *
-     * @param tree The ANF [[Function]] to be analyzed.
-     * @return The schema information for the input tree.
-     */
+      * Compute the (local) schema information for an anonymous function.
+      *
+      * @param tree The ANF [[Function]] to be analyzed.
+      * @return The schema information for the input tree.
+      */
     private[emma] def local(tree: Function): Schema.Info = tree match {
       case Function(_, block@block(_, _)) =>
         val bs = local(block, new Core.Meta(tree))
@@ -158,7 +160,16 @@ trait SchemaOptimizations extends Common {
           findBackwardEquivalences(Term sym target) + selection
 
         case app(method, types, args) =>
-          args.flatMap(arg => findBackwardEquivalences(arg.symbol)).toSet
+          // N.B. we only use the first parameter/argument list
+          val defDef = meta.defdef(method).get
+          val params = defDef.vparamss.head
+          val functionSchema = local(Function(params, defDef.rhs))
+          val backwards = args.flatMap(arg => findBackwardEquivalences(arg.symbol)).toSet
+          val forwards = args.zip(params).map { case (a, p) => SimpleField(a.symbol) -> SimpleField(p.symbol) }
+          // TODO: Now what? In theory I'd need to create fresh symbol names for all
+          // method-local symbols for each invocation of the target method
+//          backwards ++ forwards ++ functionSchema.equivalences
+          Set.empty
 
         // N.B. order is important, as we want to catch case class constructor applications
         // before other method calls or class instantiations

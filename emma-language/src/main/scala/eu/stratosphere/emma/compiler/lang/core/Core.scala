@@ -239,7 +239,7 @@ trait Core extends Common
 
       //@formatter:on
 
-      private object is {
+      private[emma] object is {
 
         def mutable(flags: FlagSet): Boolean =
           (flags | Flag.MUTABLE) == flags
@@ -364,19 +364,38 @@ trait Core extends Common
           value.symbol -> value
       }.toMap
 
+      val defdefs: Map[Symbol, DefDef] = tree.collect {
+        case value: DefDef =>
+          value.symbol -> value
+      }.toMap
+
       val uses: Map[Symbol, Int] =
         tree.collect { case id: Ident => id.symbol }
           .view.groupBy(identity)
           .mapValues(_.size)
           .withDefaultValue(0)
 
+      val usesTerms: Map[Symbol, Set[Tree]] =
+        tree.collect { case t: ValDef => t.rhs }
+          .flatMap(term => term.collect { case id: Ident => id.symbol }.map(id => (id, term)))
+          .groupBy(_._1)
+          .mapValues(l => l.map(_._2).toSet)
+
       @inline
       def valdef(sym: Symbol): Option[ValDef] =
         defs.get(sym)
 
       @inline
+      def defdef(sym: Symbol): Option[DefDef] =
+        defdefs.get(sym)
+
+      @inline
       def valuses(sym: Symbol): Int =
         uses(sym)
+
+      @inline
+      def valusesTerms(sym: Symbol): Set[Tree] =
+        usesTerms(sym)
     }
 
   }

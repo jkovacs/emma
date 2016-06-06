@@ -39,6 +39,14 @@ class SchemaInfoSpec extends BaseCompilerSpec {
     Owner.at(Owner.enclosing)
   }
 
+  def fix: Tree => Tree = tree => {
+    val moduleSel = Tree.resolve(IR.module)
+    preWalk(tree) {
+      case s@Select(_, name) if IR.comprehensionOps contains s.symbol.asTerm =>
+        Term.sel(moduleSel, s.symbol.asTerm)
+    }
+  }
+
   def symbolOf(name: String)(tree: Tree): Symbol = tree.collect {
     case vd@ValDef(_, TermName(`name`), _, _) => vd.symbol
   }.head
@@ -194,6 +202,29 @@ class SchemaInfoSpec extends BaseCompilerSpec {
       schema.fieldClasses should contain allOf (cls$02, cls$03, cls$04)
     }
 
+    "with local function calls" in {
+      val fn = typeCheck(reify {
+        (t: (Long, User, User)) => {
+          def f(u: User): String = {
+            val n = u.name
+            val first = n.first
+            first
+          }
+
+          val k = t._1
+          val l = t._2
+          val m = t._3
+          val n = f(l)
+          val o = f(m)
+          val a = (k, n, o)
+          a
+        }
+      }).asInstanceOf[Function]
+
+      val schema = Schema.local(fn)
+      println(schema)
+
+    }
 
     "with control flow" in {
       // TODO
@@ -202,15 +233,7 @@ class SchemaInfoSpec extends BaseCompilerSpec {
 
   "comprehension schema" - {
     "of simple join" in {
-      val program2 = typeCheckAndANF(reify {
-        val ucs = for {
-          u <- Marketing.users
-          c <- Marketing.clicks
-          if u.id == c.userID
-        } yield (u, c)
-        write("result.csv", new CSVOutputFormat[(User, Click)])(ucs)
-      }).asInstanceOf[Block]
-      val program = typeCheck(reify {
+      val program = (typeCheckAndANF andThen fix) (reify {
         val users$1: DataBag[User] = Marketing.users
         val clicks$1: DataBag[Click] = Marketing.clicks
         val ucs: DataBag[(User, Click)] = ir.comprehension[(User, Click), DataBag]({
@@ -232,8 +255,8 @@ class SchemaInfoSpec extends BaseCompilerSpec {
         ucs
       }).asInstanceOf[Block]
 
-      val comp = program2.collect { case Tree.val_(Term.sym(TermName("ucs"), _), rhs, _) => rhs }.head
-      val meta = new Core.Meta(program2)
+      val comp = program match { case Tree.block(_, expr) => expr }
+      val meta = new Core.Meta(program)
 
       val schema = Schema.comprehensionSchema(comp, meta)
       val equivSchema = schema.schema
@@ -242,10 +265,10 @@ class SchemaInfoSpec extends BaseCompilerSpec {
 
       schema.consumes should have size 2
 
-      val u = simpleField("u")(program2)
-      val c = simpleField("c$2")(program2)
-      val users = simpleField("users$1")(program2)
-      val clicks = simpleField("clicks$1")(program2)
+      val u = simpleField("u")(program)
+      val c = simpleField("c$2")(program)
+      val users = simpleField("users$1")(program)
+      val clicks = simpleField("clicks$1")(program)
       for (g <- schema.consumes) {
         g should matchPattern {
           case Schema.Generate(`u`, f) if equivSchema.equivalences(f).contains(users) =>
@@ -254,9 +277,8 @@ class SchemaInfoSpec extends BaseCompilerSpec {
       }
 
       val resultField = schema.yields.result
-      equivSchema.equivalences(memberField(resultField, "_1")(program2)) should contain (u)
-      equivSchema.equivalences(memberField(resultField, "_2")(program2)) should contain (c)
-
+      equivSchema.equivalences(memberField(resultField, "_1")(program)) should contain (u)
+      equivSchema.equivalences(memberField(resultField, "_2")(program)) should contain (c)
     }
   }
 

@@ -53,7 +53,7 @@ class HolisticOptimizationsSpec extends BaseCompilerSpec {
       write("result.csv", new CSVOutputFormat[(Long, Instant)])(res)
     })
 
-    println(asSource("act tree")(act))
+//    println(asSource("act tree")(act))
     Schema.global(act)
     assert(false)
 
