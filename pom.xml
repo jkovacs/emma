@@ -509,6 +509,7 @@
         <module>emma-examples</module>
         <module>emma-gui</module>
         <module>emma-quickstart</module>
+        <module>holopt-examples</module>
     </modules>
 
 </project>
